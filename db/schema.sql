@@ -27,33 +27,22 @@ CREATE TABLE IF NOT EXISTS source.order_lines (
     quantity INTEGER NOT NULL,
     category TEXT NOT NULL,
     sub_category TEXT NOT NULL,
-    CONSTRAINT order_lines_order_fk
-        FOREIGN KEY (order_id)
-        REFERENCES source.orders(order_id),
-    CONSTRAINT order_lines_discount_check
-        CHECK (discount >= 0 AND discount <= 1),
-    CONSTRAINT order_lines_sales_check
-        CHECK (sales >= 0),
-    CONSTRAINT order_lines_quantity_check
-        CHECK (quantity > 0)
+    CONSTRAINT order_lines_order_fk FOREIGN KEY (order_id) REFERENCES source.orders(order_id),
+    CONSTRAINT order_lines_discount_check CHECK (discount >= 0 AND discount <= 1),
+    CONSTRAINT order_lines_sales_check CHECK (sales >= 0),
+    CONSTRAINT order_lines_quantity_check CHECK (quantity > 0)
 );
 
 CREATE TABLE IF NOT EXISTS source.sales_targets (
     month_of_order_date DATE NOT NULL,
     category TEXT NOT NULL,
     target NUMERIC(14,2) NOT NULL,
-    CONSTRAINT sales_targets_pk
-        PRIMARY KEY (month_of_order_date, category),
-    CONSTRAINT sales_targets_target_check
-        CHECK (target >= 0)
+    CONSTRAINT sales_targets_pk PRIMARY KEY (month_of_order_date, category),
+    CONSTRAINT sales_targets_target_check CHECK (target >= 0)
 );
 
--- Source-schema design notes:
--- * order_id is the business key for source.orders.
--- * order_lines uses a generated technical identifier because the source has
---   no reliable natural line identifier and contains exact duplicate rows.
--- * Negative profit is intentionally allowed because it can be valid business data.
--- * Sales targets are uniquely identified by month/category.
--- * The schema has been checked against the profiling and validation results.
--- * Runtime execution against a PostgreSQL server remains an environment-level
---   verification step and is not claimed by this repository change.
+-- order_id is the source business key.
+-- order_lines uses a generated technical identifier because the source has no reliable natural line identifier.
+-- Negative profit is intentionally allowed because it can be valid business data.
+-- Sales targets are uniquely identified by month/category.
+-- The schema has been checked against the profiling and validation results.
