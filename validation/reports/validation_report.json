@@ -1,0 +1,12 @@
+{
+  "workbook": "(ecommerce)P1-AmazingMartEU2.xlsx",
+  "validation_status": "FAIL",
+  "note": "The source contains 2 exact duplicate order-line records, represented by 4 rows because both copies are retained in the quarantine output.",
+  "summary": {
+    "rules_passed": 18,
+    "rules_failed": 1,
+    "failed_rule": "breakdown_exact_duplicates",
+    "duplicate_rows_quarantined": 4,
+    "duplicate_records_identified": 2
+  }
+}
