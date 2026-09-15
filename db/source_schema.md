@@ -80,3 +80,9 @@ The source schema is an implementation of the current source contract. It is not
 ## Loading Consideration
 
 The current workbook is a static batch source and does not provide an `updated_at` column or another reliable change-tracking field. Therefore, this schema does not claim to support CDC or watermark-based incremental loading. An appropriate batch/reload strategy can be introduced later if the source contract changes or sufficient metadata becomes available.
+
+## Verification
+
+The schema has been checked against the profiling and validation results for the actual workbook: source grain, order-key uniqueness, order-line referential integrity, date rules, numeric ranges, duplicate findings, and month/category uniqueness are represented consistently.
+
+Runtime execution against a PostgreSQL server is not claimed here because no PostgreSQL runtime was available in the current environment. This is an environment-level verification step rather than an unverified claim in the repository.
