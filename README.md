@@ -72,6 +72,7 @@ GitHub Actions  -> CI/CD
 - Spring Boot
 - Spring Data
 - REST APIs
+- **Maven (Mvn)** — Java project build, dependency management, testing, and packaging
 
 ### Data Engineering
 
@@ -165,6 +166,8 @@ Operational E-Commerce Data
 
 Apache Airflow coordinates the dependent pipeline stages, while Spring Boot provides controlled programmatic access to selected datasets and pipeline information.
 
+Maven manages the Java/Spring Boot build lifecycle, project dependencies, automated Java tests, and packaging of the backend application.
+
 ## Engineering Objective
 
 The primary objective is to engineer a reliable and reproducible data platform rather than perform the final business analysis.
@@ -180,5 +183,6 @@ The project therefore focuses on engineering questions such as:
 - How are dependent pipeline stages coordinated?
 - How can processing be tested and reproduced consistently?
 - How can downstream consumers access trusted datasets through controlled interfaces?
+- How is the Java backend built, tested, and packaged consistently?
 
 The result is an end-to-end demonstration of how operational e-commerce data can be engineered into reliable, analysis-ready data.
