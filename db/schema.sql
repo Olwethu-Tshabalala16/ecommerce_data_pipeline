@@ -54,3 +54,6 @@ CREATE TABLE IF NOT EXISTS source.sales_targets (
 --   no reliable natural line identifier and contains exact duplicate rows.
 -- * Negative profit is intentionally allowed because it can be valid business data.
 -- * Sales targets are uniquely identified by month/category.
+-- * The schema has been checked against the profiling and validation results.
+-- * Runtime execution against a PostgreSQL server remains an environment-level
+--   verification step and is not claimed by this repository change.
