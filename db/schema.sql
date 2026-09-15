@@ -47,3 +47,10 @@ CREATE TABLE IF NOT EXISTS source.sales_targets (
     CONSTRAINT sales_targets_target_check
         CHECK (target >= 0)
 );
+
+-- Source-schema design notes:
+-- * order_id is the business key for source.orders.
+-- * order_lines uses a generated technical identifier because the source has
+--   no reliable natural line identifier and contains exact duplicate rows.
+-- * Negative profit is intentionally allowed because it can be valid business data.
+-- * Sales targets are uniquely identified by month/category.
