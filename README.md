@@ -46,6 +46,7 @@ Transformation / Processing Layer
 Apache Airflow  -> Pipeline orchestration
 Docker          -> Containerisation
 GitHub Actions  -> CI/CD
+Makefile        -> Developer workflow automation
 ```
 
 ### Architectural Responsibilities
@@ -62,6 +63,7 @@ GitHub Actions  -> CI/CD
 | API | Provide controlled programmatic access to data | Java / Spring Boot |
 | Orchestration | Schedule and coordinate pipeline dependencies | Apache Airflow |
 | Infrastructure | Provide reproducible execution environments | Docker |
+| Developer Automation | Standardise common development, testing, build, and execution commands | Makefile |
 | Delivery | Automate testing and software delivery | GitHub Actions |
 
 ## Technologies
@@ -99,6 +101,7 @@ The initial dimensional warehouse model consists of:
 ### Infrastructure and DevOps
 
 - Docker
+- Makefile
 - Git
 - GitHub
 - GitHub Actions
@@ -128,6 +131,7 @@ The project demonstrates practical implementation of:
 - Automated testing
 - Containerisation
 - CI/CD
+- Development workflow automation
 
 ## Data Pipeline
 
@@ -168,6 +172,8 @@ Apache Airflow coordinates the dependent pipeline stages, while Spring Boot prov
 
 Maven manages the Java/Spring Boot build lifecycle, project dependencies, automated Java tests, and packaging of the backend application.
 
+The Makefile provides a consistent command interface for common development workflows, such as building, testing, running, and managing project services. The exact targets will be defined as the implementation develops.
+
 ## Engineering Objective
 
 The primary objective is to engineer a reliable and reproducible data platform rather than perform the final business analysis.
@@ -182,6 +188,7 @@ The project therefore focuses on engineering questions such as:
 - How should data be modelled for downstream analytical workloads?
 - How are dependent pipeline stages coordinated?
 - How can processing be tested and reproduced consistently?
+- How can development and operational commands be standardised?
 - How can downstream consumers access trusted datasets through controlled interfaces?
 - How is the Java backend built, tested, and packaged consistently?
 
