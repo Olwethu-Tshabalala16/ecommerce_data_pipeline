@@ -1,22 +1,15 @@
-"""Transform validated e-commerce source data into a Java-ready structure."""
+"""Transform validated e-commerce source data into a Java-ready JSON file."""
 
 from __future__ import annotations
 
-from datetime import date
+import json
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 
-LIST_ORDER_COLUMNS = [
-    "Order ID", "Order Date", "Customer Name", "City", "Country",
-    "Region", "Segment", "Ship Date", "Ship Mode", "State",
-]
-
-BREAKDOWN_COLUMNS = [
-    "Order ID", "Product Name", "Discount", "Sales", "Profit",
-    "Quantity", "Category", "Sub-Category",
-]
+OUTPUT_PATH = Path("transformation/output/transformed_orders.json")
 
 
 def standardize_column_names(df: pd.DataFrame) -> pd.DataFrame:
@@ -50,9 +43,8 @@ def standardize_types(df: pd.DataFrame) -> pd.DataFrame:
         if column in result.columns:
             result[column] = pd.to_datetime(result[column]).dt.strftime("%Y-%m-%d")
 
-    for column in ("quantity",):
-        if column in result.columns:
-            result[column] = result[column].astype(int)
+    if "quantity" in result.columns:
+        result["quantity"] = result["quantity"].astype(int)
 
     for column in ("discount", "sales", "profit"):
         if column in result.columns:
@@ -64,7 +56,7 @@ def standardize_types(df: pd.DataFrame) -> pd.DataFrame:
 def combine_order_data(
     orders: pd.DataFrame, order_lines: pd.DataFrame
 ) -> pd.DataFrame:
-    """Join order-level attributes to order-line records using Order ID."""
+    """Join order-level attributes to valid order-line records using Order ID."""
     orders = standardize_column_names(orders)
     order_lines = standardize_column_names(order_lines)
 
@@ -81,7 +73,7 @@ def combine_order_data(
 def transform_orders(
     orders: pd.DataFrame, order_lines: pd.DataFrame
 ) -> list[dict[str, Any]]:
-    """Create one JSON-ready record per product line within an order."""
+    """Create one JSON-ready record per valid product line within an order."""
     combined = combine_order_data(orders, order_lines)
 
     records: list[dict[str, Any]] = []
@@ -117,6 +109,31 @@ def transform_orders(
     return records
 
 
-def serialize_orders(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return JSON-compatible Python records for downstream serialization."""
-    return records
+def write_json(records: list[dict[str, Any]], output_path: Path = OUTPUT_PATH) -> Path:
+    """Serialize transformed records to a UTF-8 JSON file."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as file:
+        json.dump(records, file, indent=2, ensure_ascii=False)
+    return output_path
+
+
+def generate_json(
+    workbook_path: Path,
+    output_path: Path = OUTPUT_PATH,
+) -> Path:
+    """Read the source workbook, quarantine exact duplicate lines, then transform valid data."""
+    orders = pd.read_excel(workbook_path, sheet_name="ListOfOrders")
+    order_lines = pd.read_excel(workbook_path, sheet_name="OrderBreakdown")
+
+    # Exact duplicate order-line records were already identified by validation.
+    # All copies are excluded here because they are quarantined for investigation.
+    order_lines = order_lines.loc[~order_lines.duplicated(keep=False)].copy()
+
+    records = transform_orders(orders, order_lines)
+    return write_json(records, output_path)
+
+
+if __name__ == "__main__":
+    workbook = Path("(ecommerce)P1-AmazingMartEU2.xlsx")
+    path = generate_json(workbook)
+    print(f"Generated {path}")
