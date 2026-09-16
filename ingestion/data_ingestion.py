@@ -16,6 +16,36 @@ import pandas as pd
 
 EXPECTED_SHEETS = ("ListOfOrders", "OrderBreakdown", "SalesTargets")
 
+EXPECTED_COLUMNS = {
+    "ListOfOrders": (
+        "Order ID",
+        "Order Date",
+        "Customer Name",
+        "City",
+        "Country",
+        "Region",
+        "Segment",
+        "Ship Date",
+        "Ship Mode",
+        "State",
+    ),
+    "OrderBreakdown": (
+        "Order ID",
+        "Product Name",
+        "Discount",
+        "Sales",
+        "Profit",
+        "Quantity",
+        "Category",
+        "Sub-Category",
+    ),
+    "SalesTargets": (
+        "Month of Order Date",
+        "Category",
+        "Target",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class IngestionResult:
@@ -27,16 +57,26 @@ class IngestionResult:
 
 
 def validate_workbook_structure(workbook_path: Path) -> None:
-    """Ensure the source workbook exists and contains the expected sheets."""
+    """Ensure the source workbook has the required sheets and columns."""
     if not workbook_path.is_file():
         raise FileNotFoundError(f"Source workbook not found: {workbook_path}")
 
     workbook = pd.ExcelFile(workbook_path)
     actual_sheets = tuple(workbook.sheet_names)
 
-    missing = [sheet for sheet in EXPECTED_SHEETS if sheet not in actual_sheets]
-    if missing:
-        raise ValueError(f"Missing required source sheets: {missing}")
+    missing_sheets = [sheet for sheet in EXPECTED_SHEETS if sheet not in actual_sheets]
+    if missing_sheets:
+        raise ValueError(f"Missing required source sheets: {missing_sheets}")
+
+    for sheet_name in EXPECTED_SHEETS:
+        columns = tuple(pd.read_excel(workbook, sheet_name=sheet_name, nrows=0).columns)
+        missing_columns = [
+            column for column in EXPECTED_COLUMNS[sheet_name] if column not in columns
+        ]
+        if missing_columns:
+            raise ValueError(
+                f"Missing required columns in {sheet_name}: {missing_columns}"
+            )
 
 
 def extract_workbook(workbook_path: Path) -> dict[str, pd.DataFrame]:
