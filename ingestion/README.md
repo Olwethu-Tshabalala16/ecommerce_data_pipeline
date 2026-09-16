@@ -15,9 +15,15 @@ s3://<bucket>/raw/amazingmart/ingestion_date=YYYY-MM-DD/<source-file>
 
 The raw zone preserves the original source file. The ingestion date is recorded in the object key, while the object metadata records the source system, ingestion timestamp, and data zone.
 
-## Credentials
+## Credentials and configuration
 
 The S3 client uses boto3's standard AWS credential provider chain. Credentials must not be committed to the repository. Use an AWS profile, environment variables, IAM role, or another supported AWS credential mechanism in the execution environment.
+
+The bucket name is supplied to the upload function rather than hard-coded into the application.
+
+## Retention assumption
+
+The raw zone is treated as an immutable audit layer. This project does not configure automatic object deletion yet. A production deployment should define an S3 Lifecycle policy based on operational, compliance, and cost requirements before enabling automatic expiration or archival.
 
 ## Responsibility boundary
 
