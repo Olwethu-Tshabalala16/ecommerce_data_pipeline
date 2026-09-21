@@ -6,12 +6,16 @@ The functions answer questions about schema, volume, keys, missing data,
 duplicates, relationships, ranges, and categorical values.
 """
 
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 import pandas as pd
 
 
 WORKBOOK_PATH = Path("(ecommerce)P1-AmazingMartEU2.xlsx")
+PROFILE_OUTPUT_PATH = Path("profiling/output/data_profile.json")
 
 
 def load_workbook(workbook_path: Path) -> dict[str, pd.DataFrame]:
@@ -272,5 +276,31 @@ def run_profile(workbook_path: Path) -> None:
     )
 
 
+def generate_profile_json(
+    workbook_path: Path,
+    output_path: Path = PROFILE_OUTPUT_PATH,
+) -> Path:
+    """Generate or update a JSON artifact containing the profiling report."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    from io import StringIO
+
+    report = StringIO()
+
+    with redirect_stdout(report):
+        run_profile(workbook_path)
+
+    profile = {
+        "source_file": workbook_path.name,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "profile_report": report.getvalue(),
+    }
+
+    with output_path.open("w", encoding="utf-8") as file:
+        json.dump(profile, file, indent=2)
+
+    return output_path
+
+
 if __name__ == "__main__":
-    run_profile(WORKBOOK_PATH)
+    generate_profile_json(WORKBOOK_PATH)
