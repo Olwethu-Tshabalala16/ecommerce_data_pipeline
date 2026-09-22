@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from transformation.data_transformation import (
@@ -50,8 +51,8 @@ def test_standardize_column_names():
 def test_standardize_types():
     combined = combine_order_data(orders_df(), lines_df())
     assert combined["orderDate"].iloc[0] == "2014-01-02"
-    assert isinstance(combined["quantity"].iloc[0], int)
-    assert isinstance(combined["sales"].iloc[0], float)
+    assert isinstance(combined["quantity"].iloc[0], (int, np.integer))
+    assert isinstance(combined["sales"].iloc[0], (float, np.floating))
 
 
 def test_combine_preserves_order_line_grain():

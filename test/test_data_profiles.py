@@ -1,10 +1,12 @@
 """Tests for the source-data profiling functions."""
 
+import json
 from pathlib import Path
 
 import pandas as pd
 
 from data_profiles import (
+    generate_profile_json,
     load_workbook,
     profile_categories,
     profile_columns,
@@ -207,3 +209,54 @@ def test_profile_sales_targets_detects_duplicate_month_category(capsys) -> None:
     assert "Duplicate month/category combinations: 1" in output
     assert "Earliest month:" in output
     assert "Latest month:" in output
+
+
+def test_generate_profile_json(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "test.xlsx"
+    output_path = tmp_path / "profiling" / "output" / "data_profile.json"
+
+    orders = pd.DataFrame({
+        "Order ID": ["A1"],
+        "Order Date": ["2024-01-01"],
+        "Ship Date": ["2024-01-03"],
+        "Customer Name": ["Alice"],
+        "City": ["Berlin"],
+        "Country": ["Germany"],
+        "Region": ["Central"],
+        "Segment": ["Consumer"],
+        "Ship Mode": ["Economy"],
+        "State": ["Berlin"],
+    })
+    breakdown = pd.DataFrame({
+        "Order ID": ["A1"],
+        "Product Name": ["Item 1"],
+        "Category": ["Technology"],
+        "Sub-Category": ["Phones"],
+        "Quantity": [2],
+        "Discount": [0.1],
+        "Sales": [100],
+        "Profit": [20],
+    })
+    targets = pd.DataFrame({
+        "Month of Order Date": ["2024-01-01"],
+        "Category": ["Technology"],
+        "Target": [1000],
+    })
+
+    with pd.ExcelWriter(workbook_path) as writer:
+        orders.to_excel(writer, sheet_name="ListOfOrders", index=False)
+        breakdown.to_excel(writer, sheet_name="OrderBreakdown", index=False)
+        targets.to_excel(writer, sheet_name="SalesTargets", index=False)
+
+    result_path = generate_profile_json(workbook_path, output_path)
+
+    assert result_path == output_path
+    assert output_path.exists()
+
+    with output_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["source_file"] == "test.xlsx"
+    assert "generated_at" in data
+    assert "ListOfOrders: SHAPE" in data["profile_report"]
+

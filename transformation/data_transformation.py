@@ -109,6 +109,11 @@ def transform_orders(
     return records
 
 
+def serialize_orders(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return JSON-compatible Python records for downstream serialization."""
+    return records
+
+
 def write_json(records: list[dict[str, Any]], output_path: Path = OUTPUT_PATH) -> Path:
     """Serialize transformed records to a UTF-8 JSON file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
