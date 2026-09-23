@@ -1,11 +1,15 @@
 """Tests for the source-data profiling functions."""
 
+from datetime import datetime, timezone
 import json
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pandas as pd
+import pytest
 
 from data_profiles import (
+    build_profile_key,
     generate_profile_json,
     load_workbook,
     profile_categories,
@@ -21,6 +25,8 @@ from data_profiles import (
     profile_sales_targets,
     profile_shape,
     profile_unique_values,
+    run_profile_and_upload,
+    upload_profile_json,
 )
 
 
@@ -259,4 +265,81 @@ def test_generate_profile_json(tmp_path: Path) -> None:
     assert data["source_file"] == "test.xlsx"
     assert "generated_at" in data
     assert "ListOfOrders: SHAPE" in data["profile_report"]
+
+
+def test_build_profile_key_preserves_filename() -> None:
+    timestamp = datetime(2026, 9, 23, 10, 0, tzinfo=timezone.utc)
+    key = build_profile_key("data_profile.json", timestamp)
+    assert key == "profiling/amazingmart/ingestion_date=2026-09-23/data_profile.json"
+
+
+def test_upload_profile_json_rejects_missing_file(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        upload_profile_json(tmp_path / "missing.json", "bucket")
+
+
+def test_upload_profile_json_rejects_empty_bucket(tmp_path: Path) -> None:
+    profile_file = tmp_path / "data_profile.json"
+    profile_file.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="bucket"):
+        upload_profile_json(profile_file, "   ")
+
+
+def test_upload_profile_json_uses_expected_key_and_metadata(tmp_path: Path) -> None:
+    profile_file = tmp_path / "data_profile.json"
+    profile_file.write_text('{"status": "ok"}', encoding="utf-8")
+    timestamp = datetime(2026, 9, 23, 10, 0, tzinfo=timezone.utc)
+    client = Mock()
+
+    with patch("data_profiles.boto3.client", return_value=client):
+        result = upload_profile_json(profile_file, "ecommerce-bucket", timestamp)
+
+    expected_key = "profiling/amazingmart/ingestion_date=2026-09-23/data_profile.json"
+    assert result == f"s3://ecommerce-bucket/{expected_key}"
+    client.upload_file.assert_called_once_with(
+        str(profile_file),
+        "ecommerce-bucket",
+        expected_key,
+        ExtraArgs={
+            "ContentType": "application/json",
+            "Metadata": {
+                "source-system": "amazingmart",
+                "profiling-timestamp": timestamp.isoformat(),
+                "data-zone": "profiling",
+            },
+        },
+    )
+
+
+def test_run_profile_and_upload(tmp_path: Path) -> None:
+    workbook_path = tmp_path / "test.xlsx"
+    output_path = tmp_path / "profiling" / "output" / "data_profile.json"
+
+    orders = pd.DataFrame({"Order ID": ["A1"], "Customer Name": ["Alice"], "City": ["Berlin"],
+                           "Country": ["Germany"], "Region": ["Central"], "Segment": ["Consumer"],
+                           "Ship Mode": ["Economy"], "State": ["Berlin"],
+                           "Order Date": ["2024-01-01"], "Ship Date": ["2024-01-02"]})
+    breakdown = pd.DataFrame({"Order ID": ["A1"], "Product Name": ["Item 1"], "Category": ["Tech"],
+                             "Sub-Category": ["Phones"], "Quantity": [1], "Discount": [0.0],
+                             "Sales": [10], "Profit": [2]})
+    targets = pd.DataFrame({"Month of Order Date": ["2024-01-01"], "Category": ["Tech"], "Target": [100]})
+
+    with pd.ExcelWriter(workbook_path) as writer:
+        orders.to_excel(writer, sheet_name="ListOfOrders", index=False)
+        breakdown.to_excel(writer, sheet_name="OrderBreakdown", index=False)
+        targets.to_excel(writer, sheet_name="SalesTargets", index=False)
+
+    client = Mock()
+    with patch("data_profiles.boto3.client", return_value=client):
+        profile_json, s3_uri = run_profile_and_upload(
+            workbook_path=workbook_path,
+            output_path=output_path,
+            bucket_name="my-bucket",
+        )
+
+    assert profile_json == output_path
+    assert profile_json.exists()
+    assert s3_uri.startswith("s3://my-bucket/profiling/amazingmart/ingestion_date=")
+    assert client.upload_file.called
+
 

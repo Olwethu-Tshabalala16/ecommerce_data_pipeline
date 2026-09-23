@@ -8,12 +8,16 @@ duplicates, relationships, ranges, and categorical values.
 
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from io import StringIO
 import json
 from pathlib import Path
 
+import boto3
 import pandas as pd
 
 
+SOURCE_NAME = "amazingmart"
+PROFILING_PREFIX = "profiling"
 WORKBOOK_PATH = Path("(ecommerce)P1-AmazingMartEU2.xlsx")
 PROFILE_OUTPUT_PATH = Path("profiling/output/data_profile.json")
 
@@ -283,8 +287,6 @@ def generate_profile_json(
     """Generate or update a JSON artifact containing the profiling report."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    from io import StringIO
-
     report = StringIO()
 
     with redirect_stdout(report):
@@ -302,5 +304,68 @@ def generate_profile_json(
     return output_path
 
 
+def build_profile_key(profile_file: str, profiling_time: datetime | None = None) -> str:
+    """Build a date-partitioned S3 key for profiling output while preserving the filename."""
+    timestamp = profiling_time or datetime.now(timezone.utc)
+    ingestion_date = timestamp.strftime("%Y-%m-%d")
+    return f"{PROFILING_PREFIX}/{SOURCE_NAME}/ingestion_date={ingestion_date}/{profile_file}"
+
+
+def upload_profile_json(
+    profile_path: Path = PROFILE_OUTPUT_PATH,
+    bucket_name: str = "",
+    profiling_time: datetime | None = None,
+) -> str:
+    """Upload the profiling JSON report to S3.
+
+    AWS credentials and region are resolved by boto3's standard credential
+    provider chain.
+    """
+    if not profile_path.is_file():
+        raise FileNotFoundError(f"Profile JSON report not found: {profile_path}")
+    if not bucket_name.strip():
+        raise ValueError("S3 bucket name must not be empty")
+
+    timestamp = profiling_time or datetime.now(timezone.utc)
+    key = build_profile_key(profile_path.name, timestamp)
+    s3 = boto3.client("s3")
+
+    s3.upload_file(
+        str(profile_path),
+        bucket_name,
+        key,
+        ExtraArgs={
+            "ContentType": "application/json",
+            "Metadata": {
+                "source-system": SOURCE_NAME,
+                "profiling-timestamp": timestamp.isoformat(),
+                "data-zone": "profiling",
+            },
+        },
+    )
+
+    return f"s3://{bucket_name}/{key}"
+
+
+def run_profile_and_upload(
+    workbook_path: Path = WORKBOOK_PATH,
+    output_path: Path = PROFILE_OUTPUT_PATH,
+    bucket_name: str = "",
+) -> tuple[Path, str]:
+    """Run profiling functions, save JSON report, and upload to S3."""
+    profile_json = generate_profile_json(workbook_path, output_path)
+    s3_uri = upload_profile_json(profile_json, bucket_name=bucket_name)
+    return profile_json, s3_uri
+
+
 if __name__ == "__main__":
-    generate_profile_json(WORKBOOK_PATH)
+    import os
+    import sys
+
+    output_file = generate_profile_json(WORKBOOK_PATH)
+    print(f"Generated profile JSON at: {output_file}")
+
+    bucket = os.getenv("S3_BUCKET_NAME") or (sys.argv[1] if len(sys.argv) > 1 else None)
+    if bucket:
+        s3_url = upload_profile_json(output_file, bucket_name=bucket)
+        print(f"Uploaded profile JSON to: {s3_url}")
