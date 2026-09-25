@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.env.*
+!.env.example
+curated/
+validation/quarantine/
+validation/reports/
+airflow/logs/
+airflow/airflow.cfg
+airflow/webserver_config.py
+target/
+*.log
