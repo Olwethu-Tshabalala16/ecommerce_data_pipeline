@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Run pytest
+        run: PYTHONPATH=. pytest -q
+
+  java:
+    name: Java tests and package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run Java tests
+        run: mvn -q test
+      - name: Build Spring Boot package
+        run: mvn -q -DskipTests package
+
+  warehouse:
+    name: PostgreSQL warehouse constraints
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: ecommerce_dw
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ecommerce_dw"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply warehouse schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d ecommerce_dw -v ON_ERROR_STOP=1 -f db/warehouse_schema.sql
+      - name: Seed minimum warehouse fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d ecommerce_dw -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO warehouse.dim_customer VALUES ('customer-key', 'Test Customer', 'Consumer');
+          INSERT INTO warehouse.dim_product VALUES ('product-key', 'Test Product', 'Furniture', 'Chairs');
+          INSERT INTO warehouse.dim_location VALUES ('location-key', 'Johannesburg', 'Gauteng', 'South Africa', 'Africa');
+          INSERT INTO warehouse.dim_date VALUES (20260101, '2026-01-01', 2026, 1, 1, 'January', 1, 4, 1);
+          INSERT INTO warehouse.dim_ship_mode VALUES ('ship-key', 'Standard');
+          INSERT INTO warehouse.dim_sales_target VALUES ('target-key', '2026-01-01', 2026, 1, 'Furniture', 100.00);
+          SQL
+      - name: Verify fact grain and measures can be inserted
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d ecommerce_dw -v ON_ERROR_STOP=1 -c "INSERT INTO warehouse.fact_order_sales (order_id, order_date_key, ship_date_key, customer_key, product_key, location_key, ship_mode_key, sales_target_key, quantity, sales, profit, discount) VALUES ('ORDER-1', 20260101, 20260101, 'customer-key', 'product-key', 'location-key', 'ship-key', 'target-key', 1, 10.00, -2.00, 0.10);"
+          if psql -h localhost -U postgres -d ecommerce_dw -c "INSERT INTO warehouse.fact_order_sales (order_id, order_date_key, ship_date_key, customer_key, product_key, location_key, ship_mode_key, sales_target_key, quantity, sales, profit, discount) VALUES ('INVALID-QTY', 20260101, 20260101, 'customer-key', 'product-key', 'location-key', 'ship-key', 'target-key', 0, 10.00, 1.00, 0.10);"; then
+            echo "Expected quantity CHECK constraint to reject zero."
+            exit 1
+          fi
+          if psql -h localhost -U postgres -d ecommerce_dw -c "INSERT INTO warehouse.fact_order_sales (order_id, order_date_key, ship_date_key, customer_key, product_key, location_key, ship_mode_key, sales_target_key, quantity, sales, profit, discount) VALUES ('INVALID-DISCOUNT', 20260101, 20260101, 'customer-key', 'product-key', 'location-key', 'ship-key', 'target-key', 1, 10.00, 1.00, 1.10);"; then
+            echo "Expected discount CHECK constraint to reject values above 1."
+            exit 1
+          fi
+
+  docker:
+    name: Docker build and Compose validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Compose configuration
+        env:
+          POSTGRES_PASSWORD: ci-password
+        run: docker compose config
+      - name: Build Spring Boot image
+        run: docker build -t ecommerce-data-api:ci .
