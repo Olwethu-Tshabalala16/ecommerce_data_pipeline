@@ -2,262 +2,327 @@
 
 ## Problem Statement
 
-E-commerce platforms generate large amounts of operational data. Although this data is valuable, raw operational data is not automatically suitable for reliable downstream analysis.
+E-commerce platforms generate large amounts of operational data, but raw operational data is not automatically suitable for reliable downstream analysis.
 
-Real-world data can contain missing values, duplicate records, invalid values, inconsistent formats, broken relationships between entities, and other quality issues. Data also needs to be stored in a way that preserves raw information while making processed data efficient and consistent for downstream consumers.
+This project engineers an end-to-end data platform that ingests e-commerce data, preserves raw data, validates data quality, transforms the data into structured datasets, loads analysis-ready data into a PostgreSQL warehouse, orchestrates the pipeline with Apache Airflow, exposes selected warehouse data through a Spring Boot REST API, and provides reproducible local infrastructure through Docker.
 
-This project addresses that problem by engineering an end-to-end data platform that ingests e-commerce data, preserves raw data, validates data quality, transforms data into structured datasets, loads analysis-ready data into a warehouse, orchestrates the pipeline, and exposes selected data and pipeline information through an API.
-
-The project focuses on **Data Engineering rather than final business analysis**. The Data Engineer is responsible for building the infrastructure and pipelines that make reliable downstream analysis possible. Data Analysts, Data Scientists, Actuaries, and business stakeholders can then use the resulting datasets to answer business questions and make decisions.
+The project focuses on **Data Engineering rather than final business analysis**. The resulting datasets are intended to provide a reliable foundation for analysts, data scientists, actuaries, and business stakeholders.
 
 ## Development Approach
 
-The project is being developed using an **Agile, incremental approach**.
+The project is developed using an **Agile, incremental approach**. Each stage is implemented, tested, documented, and integrated before becoming a dependency for the next stage.
 
-The architecture describes the intended end state, but the implementation is delivered in small, testable increments rather than attempting to build the entire platform at once.
+GitHub Issues are used to track engineering work. The implementation deliberately avoids inventing entities that are not supported by the source data.
 
-Each increment is designed to:
+## Source Dataset
 
-- solve a clearly defined engineering problem;
-- produce a working and verifiable result;
-- be tested before moving to the next dependency;
-- document important assumptions and trade-offs;
-- remain aligned with the actual source data; and
-- provide a foundation for the next increment.
-
-GitHub Issues are used to break the project into manageable engineering tasks. The implementation order may evolve as new information is discovered during profiling, validation, testing, and integration.
-
-This means that the architecture and roadmap are **living artefacts**. They are updated when implementation evidence shows that an earlier assumption is incorrect or when a more appropriate engineering decision is identified.
-
-The project deliberately avoids implementing unsupported entities merely to make the architecture appear larger. The warehouse and pipeline are based on the capabilities and fields actually present in the selected source dataset.
-
-## Current Source Dataset
-
-The current implementation uses the downloaded e-commerce workbook:
+The current implementation uses:
 
 `(ecommerce)P1-AmazingMartEU2.xlsx`
 
-The workbook contains three source sheets:
+The workbook contains:
 
 - `ListOfOrders` — order-level information
 - `OrderBreakdown` — product/order-line information
 - `SalesTargets` — monthly category sales targets
 
+### Source Grain
+
 The natural grain of `OrderBreakdown` is:
 
 > **One row represents one product line within an order.**
 
-The current source data does **not** contain payment or inventory information. Therefore, payment and inventory entities are not fabricated as part of the implementation.
-
-The source dataset has been profiled before downstream modelling. This profiling identified, among other findings, duplicate order-line records and ambiguous city-only identification. These findings inform the validation and warehouse design.
+The current source does not contain payment or inventory information, so those entities are not fabricated in the warehouse.
 
 ## Architecture
 
-This project follows a **Layered Architecture**, where each layer has a defined responsibility and passes data or services to the next appropriate layer.
-
 ```text
-E-Commerce Data Source
-          |
-          v
-    Ingestion Layer
-        Python
-          |
-          v
-   Raw Data Lake Layer
-        AWS S3
-          |
-          v
-Data Quality / Validation Layer
-          |
-          v
-Transformation / Processing Layer
-     Python | PySpark
-          |
-          v
-    Curated Data Layer
-          |
-          v
-   Data Warehouse Layer
-  Dimensional / Star Schema
-          |
-          v
-     Data Access Layer
-       Spring Boot
-
-Apache Airflow  -> Pipeline orchestration
-Docker          -> Containerisation
-GitHub Actions  -> CI/CD
-Makefile        -> Developer workflow automation
+                    E-Commerce Workbook
+                            |
+                            v
+                     Python Ingestion
+                            |
+                            v
+                       AWS S3 Raw
+                            |
+                            v
+                  Data Quality / Validation
+                     |              |
+                     | invalid      v
+                     |         Quarantine
+                     v
+                 PySpark Processing
+                            |
+                            v
+                    Curated Parquet
+                            |
+                            v
+                 PostgreSQL Warehouse
+                  Dimensional Star Schema
+                            |
+                            v
+                 Spring Boot REST API
+                            
+Apache Airflow  ---> orchestrates pipeline dependencies
+Docker          ---> reproducible local environment
+Makefile        ---> standard developer commands
+GitHub Actions  ---> automated tests and build verification
 ```
 
 ### Architectural Responsibilities
 
 | Layer | Responsibility | Technology |
 |---|---|---|
-| Source | Provide the operational e-commerce dataset | Excel / source dataset |
-| Ingestion | Extract source data while preserving source information | Python |
+| Source | Provide operational e-commerce data | Excel |
+| Ingestion | Extract and preserve source information | Python |
 | Raw Storage | Preserve ingested source data | AWS S3 |
-| Data Quality | Validate incoming data against defined quality requirements and isolate invalid records | Python / SQL |
-| Processing | Standardise, transform, and prepare data | Python / PySpark |
-| Curated Data | Store transformed datasets ready for loading | AWS S3 |
-| Warehouse | Store structured, analysis-ready data | PostgreSQL / SQL |
-| API | Provide controlled programmatic access to selected data | Java / Spring Boot |
-| Orchestration | Schedule and coordinate pipeline dependencies | Apache Airflow |
-| Infrastructure | Provide reproducible execution environments | Docker |
-| Developer Automation | Standardise common development, testing, build, and execution commands | Makefile |
-| Delivery | Automate testing and software delivery | GitHub Actions |
+| Data Quality | Validate records and isolate problematic data | Python / SQL |
+| Processing | Transform and standardise validated data | Python / PySpark |
+| Curated Data | Store transformed datasets | Parquet / S3-compatible storage |
+| Warehouse | Store analysis-ready dimensional data | PostgreSQL |
+| API | Provide controlled access to selected warehouse data | Java / Spring Boot |
+| Orchestration | Coordinate pipeline dependencies | Apache Airflow |
+| Infrastructure | Reproducible local services | Docker / Docker Compose |
+| Developer Workflow | Standardise common commands | Makefile |
+| CI/CD | Automatically test and build the project | GitHub Actions |
 
-## Technologies
+## Warehouse Model
 
-### Backend
+The current warehouse contains:
 
-- Java
-- Spring Boot
-- Spring Data
-- REST APIs
-- **Maven (Mvn)** — Java project build, dependency management, testing, and packaging
-
-### Data Engineering
-
-- Python
-- PySpark
-- Apache Airflow
-- SQL
-
-### Databases and Storage
-
-- PostgreSQL
-- AWS S3
-
-### Data Warehouse
-
-The warehouse model is being developed from the actual source dataset rather than from assumed e-commerce entities.
-
-The current target dimensional model consists of:
-
-- `dim_customer`
-- `dim_product`
-- `dim_location`
-- `dim_date`
-- `dim_ship_mode`
-- `dim_sales_target`
-- `fact_order_sales`
+- `warehouse.dim_customer`
+- `warehouse.dim_product`
+- `warehouse.dim_location`
+- `warehouse.dim_date`
+- `warehouse.dim_ship_mode`
+- `warehouse.dim_sales_target`
+- `warehouse.fact_order_sales`
 
 The central fact table preserves the source order-line grain:
 
 > **One fact row represents one product line within an order.**
 
-Measures include quantity, sales, profit, and discount.
+Measures include:
 
-Surrogate keys will be used where appropriate for warehouse dimensions, while source business identifiers and attributes will be retained where they are needed for traceability.
+- quantity
+- sales
+- profit
+- discount
 
-The model may evolve during implementation as schema design, source behaviour, and integration testing provide additional evidence.
+Dimension keys are deterministic and the warehouse applies foreign-key and measure constraints.
+
+## Transformation Layer
+
+PySpark produces the curated dimensional datasets:
+
+```text
+dim_customer
+dim_product
+dim_location
+dim_date
+dim_ship_mode
+dim_sales_target
+fact_order_sales
+```
+
+The transformation preserves order-line grain and uses deterministic dimension keys derived from natural attributes.
+
+The latest verified curated row counts are:
+
+| Dataset | Rows |
+|---|---:|
+| dim_customer | 792 |
+| dim_product | 1,810 |
+| dim_location | 1,001 |
+| dim_date | 1,436 |
+| dim_ship_mode | 4 |
+| dim_sales_target | 144 |
+| fact_order_sales | 8,043 |
+
+## Spring Boot API
+
+The backend follows:
+
+```text
+Controller
+    |
+    v
+Service
+    |
+    v
+Repository
+    |
+    v
+PostgreSQL Warehouse
+```
+
+Current API resources include:
+
+- `GET /api/v1/products`
+- `GET /api/v1/customers`
+- `GET /api/v1/orders/lines`
+- `GET /api/v1/metadata`
+- `GET /api/v1/health`
+
+The API uses Maven for dependency management, testing, and packaging.
+
+Payment and inventory endpoints are intentionally absent because those entities are not present in the source dataset.
+
+## Airflow Orchestration
+
+The DAG is:
+
+`ecommerce_data_pipeline`
+
+The current dependency graph is:
+
+```text
+extract ──────> validate ──────> transform ──> quality ──> warehouse_load
+    |
+    └─────────> raw_storage ────────^
+```
+
+The DAG coordinates:
+
+1. source extraction
+2. validation
+3. raw S3 storage
+4. PySpark transformation
+5. curated-data quality checks
+6. PostgreSQL warehouse loading
+
+The DAG is configured for daily scheduling with catch-up disabled.
+
+## Docker
+
+Docker Compose provides a reproducible local environment containing:
+
+| Service | Purpose | Default Port |
+|---|---|---:|
+| PostgreSQL | Analytical warehouse | 5432 |
+| Spring Boot API | Data access API | 8080 |
+| Airflow | Pipeline orchestration | 8081 |
+
+First-time setup:
+
+```bash
+cp .env.example .env
+```
+
+Then:
+
+```bash
+docker compose up --build -d
+```
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs airflow
+docker compose down
+```
+
+Real credentials belong in `.env`, which is excluded from version control.
+
+See `docs/docker.md` for the complete local workflow.
+
+## Makefile
+
+Common development workflows are standardised through the Makefile:
+
+```bash
+make test
+make java-test
+make java-package
+make docker-build
+make up
+make down
+make logs
+make validate
+make profile
+make transform
+```
+
+This keeps Python, Java, Docker, and pipeline commands consistent across development environments.
+
+## Testing and CI/CD
+
+GitHub Actions automatically verifies the project on pushes to `main` and pull requests targeting `main`.
+
+The CI workflow covers:
+
+- Python `pytest` tests
+- Java/Spring Boot tests
+- Maven package verification
+- PostgreSQL warehouse constraint tests
+- Docker Compose configuration validation
+- Spring Boot Docker image builds
+
+The warehouse CI job specifically verifies important fact-table constraints, including valid quantity and discount ranges.
 
 ## Core Data Engineering Concepts
 
-The project demonstrates practical implementation of:
+The project demonstrates:
 
-- Data profiling
-- Data ingestion
-- Data validation and data quality
-- Quarantine of invalid or duplicate records
+- data profiling
+- data ingestion
+- data validation
+- data-quality rules
+- quarantine of problematic records
 - ETL / ELT concepts
-- Batch processing
-- Incremental loading where supported by the source design
-- Data lake architecture
-- Data warehousing
-- Dimensional modelling
-- Data transformation
-- Distributed processing
-- Pipeline orchestration
-- Metadata and lineage
-- Idempotent processing
-- Automated testing
-- Containerisation
+- batch processing
+- object storage
+- dimensional modelling
+- star-schema design
+- PySpark transformation
+- Parquet
+- PostgreSQL warehousing
+- pipeline orchestration
+- metadata and lineage
+- idempotent processing
+- REST API development
+- automated testing
+- containerisation
 - CI/CD
-- Development workflow automation
+- developer workflow automation
 
-Not every concept is implemented at the same time. Each is introduced when the preceding layers provide the required foundation.
-
-## Data Pipeline
-
-The intended end-to-end data flow is:
+## Project Structure
 
 ```text
-Source Dataset
-     |
-     v
-Data Ingestion
-     |
-     v
-Raw Data Lake
-   AWS S3
-     |
-     v
-Data Quality Checks
-     |
-     +---- invalid / duplicate records
-     |             |
-     |             v
-     |         Quarantine
-     |
-     v
-Transformation / Processing
-   Python / PySpark
-     |
-     v
-Curated Data
-     |
-     v
-Data Warehouse
- PostgreSQL
-     |
-     v
-Analysis-Ready Data
-     |
-     v
-Analysts / Data Scientists /
-Actuaries / Business Consumers
+.
+├── airflow/              # Airflow DAGs
+├── db/                   # Source and warehouse SQL schemas
+├── docker/               # Container-specific configuration
+├── docs/                 # Architecture and operational documentation
+├── ingestion/            # Source ingestion and S3 storage
+├── transformation/       # PySpark processing
+├── validation/            # Data-quality validation and quarantine
+├── warehouse/             # PostgreSQL warehouse loader
+├── src/                   # Spring Boot API
+├── tests/                 # Python tests
+├── Dockerfile             # Spring Boot container image
+├── compose.yaml           # Local multi-service environment
+├── Makefile               # Standard development commands
+├── pom.xml                # Maven/Spring Boot build
+├── requirements.txt       # Python dependencies
+└── .github/workflows/     # CI/CD automation
 ```
-
-Apache Airflow will coordinate the dependent pipeline stages once the underlying pipeline components are independently implemented and tested.
-
-Spring Boot provides controlled programmatic access to selected datasets and pipeline information.
-
-Maven manages the Java/Spring Boot build lifecycle, project dependencies, automated Java tests, and packaging of the backend application.
-
-The Makefile provides a consistent command interface for common development workflows, such as building, testing, running, and managing project services. The exact targets will be defined as implementation progresses.
-
-## Current Implementation Progress
-
-The project is being built incrementally. The current implemented stages include:
-
-1. **Source data profiling** — workbook structure, columns, nulls, duplicates, keys, relationships, dates, numeric ranges, categories, grain, and location combinations were profiled.
-2. **Source validation** — defined quality rules are applied before transformation.
-3. **Quarantine** — identified duplicate order-line records are isolated rather than silently deleted.
-4. **Transformation** — validated source data is standardised and transformed while preserving the order-line grain.
-5. **JSON contract** — transformed records are being prepared as a structured interchange format between the Python data-processing layer and Java.
-6. **Maven / Spring Boot foundation** — the Java backend project has been initialised and is being developed incrementally from the JSON contract.
-
-The remaining layers are intentionally implemented in dependency order rather than being treated as a single large build.
 
 ## Engineering Objective
 
-The primary objective is to engineer a reliable and reproducible data platform rather than perform the final business analysis.
+The objective is to demonstrate how raw operational e-commerce data can be engineered into reliable, analysis-ready data through a reproducible platform.
 
-The project therefore focuses on engineering questions such as:
+The project therefore emphasises:
 
-- How is data extracted from the available source?
-- How is raw data preserved?
-- How is data quality evaluated against defined requirements?
-- How are problematic records isolated for investigation?
-- How is source data transformed into usable structures?
-- How can historical data be retained without unnecessary full reloads when the source supports an appropriate incremental strategy?
-- How should data be modelled for downstream analytical workloads?
-- How are dependent pipeline stages coordinated?
-- How can processing be tested and reproduced consistently?
-- How can development and operational commands be standardised?
-- How can downstream consumers access trusted datasets through controlled interfaces?
-- How is the Java backend built, tested, and packaged consistently?
+- preserving source data
+- explicit data-quality rules
+- traceable transformations
+- dimensional modelling
+- reliable warehouse loading
+- orchestration of dependent stages
+- controlled API access
+- reproducible infrastructure
+- automated verification
 
-The result is an incremental, end-to-end demonstration of how operational e-commerce data can be engineered into reliable, analysis-ready data.
+The platform is an engineering foundation for downstream analytical work rather than an end-user business intelligence application.
