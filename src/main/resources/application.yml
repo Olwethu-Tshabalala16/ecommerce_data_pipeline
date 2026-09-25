@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: ecommerce-data-api
+  datasource:
+    url: ${WAREHOUSE_JDBC_URL:jdbc:postgresql://localhost:5432/ecommerce_dw}
+    username: ${WAREHOUSE_USER:postgres}
+    password: ${WAREHOUSE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+server:
+  port: ${SERVER_PORT:8080}
