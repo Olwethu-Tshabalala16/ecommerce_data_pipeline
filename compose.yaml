@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecommerce_dw
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./db/warehouse_schema.sql:/docker-entrypoint-initdb.d/01-warehouse-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecommerce_dw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      WAREHOUSE_JDBC_URL: jdbc:postgresql://postgres:5432/ecommerce_dw
+      WAREHOUSE_USER: postgres
+      WAREHOUSE_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+      SERVER_PORT: 8080
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    restart: unless-stopped
+    environment:
+      AIRFLOW_HOME: /opt/airflow
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/project/airflow/dags
+      WAREHOUSE_DB: ecommerce_dw
+      WAREHOUSE_USER: postgres
+      WAREHOUSE_PASSWORD: ${POSTGRES_PASSWORD:?Create .env from .env.example}
+      WAREHOUSE_HOST: postgres
+      WAREHOUSE_PORT: 5432
+      RAW_S3_BUCKET: ${RAW_S3_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    ports:
+      - "${AIRFLOW_PORT:-8081}:8080"
+    volumes:
+      - ./:/opt/airflow/project
+      - airflow-data:/opt/airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: airflow standalone
+
+volumes:
+  postgres-data:
+  airflow-data:
