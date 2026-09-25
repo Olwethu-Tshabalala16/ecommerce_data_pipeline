@@ -3,3 +3,4 @@ openpyxl
 boto3
 pytest
 pyspark
+psycopg[binary]
