@@ -2,4 +2,3 @@ pandas
 openpyxl
 boto3
 pytest
-pyspark
